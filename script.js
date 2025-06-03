@@ -1,12 +1,8 @@
 /*
-  Rui Santos
-  Complete project details at https://RandomNerdTutorials.com/esp32-mpu-6050-web-server/
-
-  Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files.
-  The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+  Aggiornato per usare WebSocket invece di SSE
 */
 
-let scene, camera, rendered, cube;
+let scene, camera, renderer, cube;
 
 function parentWidth(elem) {
   return elem.parentElement.clientWidth;
@@ -27,11 +23,8 @@ function init3D(){
 
   document.getElementById('3Dcube').appendChild(renderer.domElement);
 
-  // Create a geometry
   const geometry = new THREE.BoxGeometry(5, 1, 4);
-
-  // Materials of each face
-  var cubeMaterials = [
+  const cubeMaterials = [
     new THREE.MeshBasicMaterial({color:0x03045e}),
     new THREE.MeshBasicMaterial({color:0x023e8a}),
     new THREE.MeshBasicMaterial({color:0x0077b6}),
@@ -41,73 +34,46 @@ function init3D(){
   ];
 
   const material = new THREE.MeshFaceMaterial(cubeMaterials);
-
   cube = new THREE.Mesh(geometry, material);
   scene.add(cube);
   camera.position.z = 5;
   renderer.render(scene, camera);
 }
 
-// Resize the 3D object when the browser window changes size
 function onWindowResize(){
   camera.aspect = parentWidth(document.getElementById("3Dcube")) / parentHeight(document.getElementById("3Dcube"));
-  //camera.aspect = window.innerWidth /  window.innerHeight;
   camera.updateProjectionMatrix();
-  //renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setSize(parentWidth(document.getElementById("3Dcube")), parentHeight(document.getElementById("3Dcube")));
-
 }
 
 window.addEventListener('resize', onWindowResize, false);
-
-// Create the 3D representation
 init3D();
 
-// Create events for the sensor readings
-if (!!window.EventSource) {
-  var source = new EventSource('/events');
+// WebSocket connection
+const socket = new WebSocket("ws://" + window.location.hostname + ":81/");
 
-  source.addEventListener('open', function(e) {
-    console.log("Events Connected");
-  }, false);
+socket.onopen = () => {
+  console.log("WebSocket Connected");
+};
 
-  source.addEventListener('error', function(e) {
-    if (e.target.readyState != EventSource.OPEN) {
-      console.log("Events Disconnected");
-    }
-  }, false);
+socket.onclose = () => {
+  console.log("WebSocket Disconnected");
+};
 
-  source.addEventListener('gyro_readings', function(e) {
-    //console.log("gyro_readings", e.data);
-    var obj = JSON.parse(e.data);
-    document.getElementById("gyroX").innerHTML = obj.gyroX;
-    document.getElementById("gyroY").innerHTML = obj.gyroY;
-    document.getElementById("gyroZ").innerHTML = obj.gyroZ;
+socket.onerror = (error) => {
+  console.log("WebSocket Error:", error);
+};
 
-    // Change cube rotation after receiving the readinds
-    cube.rotation.x = obj.gyroY;
-    cube.rotation.z = obj.gyroX;
-    cube.rotation.y = obj.gyroZ;
-    renderer.render(scene, camera);
-  }, false);
+socket.onmessage = function(event) {
+  const obj = JSON.parse(event.data);
+  document.getElementById("yaw").textContent = obj.yaw.toFixed(2);
+  document.getElementById("pitch").textContent = obj.pitch.toFixed(2);
+  document.getElementById("roll").textContent = obj.roll.toFixed(2);
 
-  source.addEventListener('temperature_reading', function(e) {
-    console.log("temperature_reading", e.data);
-    document.getElementById("temp").innerHTML = e.data;
-  }, false);
+  // Update cube rotation
+  cube.rotation.y = obj.yaw * Math.PI / 180;
+  cube.rotation.x = obj.pitch * Math.PI / 180;
+  cube.rotation.z = obj.roll * Math.PI / 180;
 
-  source.addEventListener('accelerometer_readings', function(e) {
-    console.log("accelerometer_readings", e.data);
-    var obj = JSON.parse(e.data);
-    document.getElementById("accX").innerHTML = obj.accX;
-    document.getElementById("accY").innerHTML = obj.accY;
-    document.getElementById("accZ").innerHTML = obj.accZ;
-  }, false);
-}
-
-function resetPosition(element){
-  var xhr = new XMLHttpRequest();
-  xhr.open("GET", "/"+element.id, true);
-  console.log(element.id);
-  xhr.send();
-}
+  renderer.render(scene, camera);
+};
