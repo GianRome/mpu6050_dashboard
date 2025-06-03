@@ -50,7 +50,7 @@ window.addEventListener('resize', onWindowResize, false);
 init3D();
 
 // WebSocket connection
-const socket = new WebSocket("ws://" + window.location.hostname + ":81/");
+const socket = new WebSocket("ws://http://192.168.1.102/:81/"); // ← metti qui l’IP del tuo ESP32
 
 socket.onopen = () => {
   console.log("WebSocket Connected");
